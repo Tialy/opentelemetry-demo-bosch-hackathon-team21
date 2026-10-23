@@ -1,0 +1,151 @@
+{
+  "schema_version": "brain/1",
+  "component": "brain",
+  "incident_id": "manual:frontend",
+  "generated_at": "2026-10-23T12:17:27.840Z",
+  "outcome": "diagnosed",
+  "trigger": {
+    "id": "manual:frontend",
+    "kind": "manual_alert",
+    "service": "frontend",
+    "title": "users see errors on the shop"
+  },
+  "symptoms_summary": "Users see 500 errors on the shop (frontend 5xx rate ~9.4%, above the 5% threshold). The errors originate in frontend's gRPC calls to the cart service (GetCart/AddItem failing with gRPC status 14 UNAVAILABLE, ECONNREFUSED to cart:7070), which propagate up through frontend-proxy as HTTP 500s.",
+  "root_cause": {
+    "category": "container_down_or_restarting",
+    "cause": "The cart container exited (exit code 0, graceful shutdown) at 12:14:56 and was not restarted, so gRPC connections to cart:7070 are refused and every cart-dependent request fails.",
+    "component": "cart container (oteldemo.CartService, port 7070)",
+    "service": "cart"
+  },
+  "confidence": 0.9,
+  "model_confidence": 0.95,
+  "confidence_notes": [
+    "1 evidence item(s) only partially matched (values real, wording reordered)"
+  ],
+  "evidence": [
+    {
+      "detail": "Detector flagged the cart container as stopped, matching the alert time.",
+      "reference": "container_stopped:cart ... Exited (0) 16 seconds ago",
+      "source": "alert",
+      "verified": true,
+      "match": "full"
+    },
+    {
+      "detail": "Container state confirms cart is exited with a clean exit code 0 (graceful shutdown, not OOM or crash), no restarts.",
+      "reference": "\"state\":\"exited\",\"health\":null,\"restart_count\":0,\"exit_code\":0,\"oom_killed\":false",
+      "source": "containers",
+      "verified": true,
+      "match": "partial"
+    },
+    {
+      "detail": "Cart's own logs show a graceful shutdown sequence at 12:14:56, the moment it stopped serving.",
+      "reference": "Application is shutting down...",
+      "source": "logs",
+      "verified": true,
+      "match": "full"
+    },
+    {
+      "detail": "Trace shows the error starts at frontend's gRPC call to cart: ECONNREFUSED to 172.18.0.21:7070, propagating up as HTTP 500.",
+      "reference": "14 UNAVAILABLE: No connection established. Last error: Error: connect ECONNREFUSED 172.18.0.21:7070",
+      "source": "traces",
+      "verified": true,
+      "match": "full"
+    },
+    {
+      "detail": "Error origin analysis confirms errors start at frontend's CartService/GetCart and AddItem calls with gRPC status 14 (UNAVAILABLE).",
+      "reference": "\"operation\":\"oteldemo.CartService/GetCart\",\"message\":null,\"error_spans\":3",
+      "source": "traces",
+      "verified": true,
+      "match": "full"
+    }
+  ],
+  "unverified_evidence_dropped": [],
+  "alternatives_ruled_out": [
+    "Application bug in frontend: frontend's own error ratio (0.147) is at/below its 30-min baseline (0.169) and all errors trace back to the cart dependency",
+    "Resource exhaustion: cart was not OOM-killed and exited with code 0",
+    "Traffic surge: frontend request rate is normal and other services show no errors",
+    "Latency issue: p95 latencies are at or below baseline for all services"
+  ],
+  "recommended_action": {
+    "action": "restart_service",
+    "reason": "The cart container exited cleanly (exit code 0) and was not restarted; restarting it will restore cart:7070 and clear the UNAVAILABLE/ECONNREFUSED errors. Investigate why it shut down (e.g. missing restart policy or an external stop) to prevent recurrence.",
+    "target": "cart"
+  },
+  "prevention": "Ensure the cart container has a restart policy (e.g. unless-stopped) and an orchestrator health check so it is automatically restarted after an unexpected stop; add an alert on container state changes to detect stops before user impact.",
+  "investigation": [
+    {
+      "step": 1,
+      "tool": "service_health",
+      "args": {},
+      "ok": true,
+      "elapsed_ms": 76,
+      "at": "2026-10-23T12:15:13.255Z"
+    },
+    {
+      "step": 2,
+      "tool": "check_alerts",
+      "args": {},
+      "ok": true,
+      "elapsed_ms": 500,
+      "at": "2026-10-23T12:15:13.331Z"
+    },
+    {
+      "step": 3,
+      "tool": "container_details",
+      "args": {
+        "name": "cart"
+      },
+      "ok": true,
+      "elapsed_ms": 853,
+      "at": "2026-10-23T12:15:14.897Z"
+    },
+    {
+      "step": 4,
+      "tool": "find_error_origins",
+      "args": {
+        "service": "frontend"
+      },
+      "ok": true,
+      "elapsed_ms": 21,
+      "at": "2026-10-23T12:15:15.751Z"
+    },
+    {
+      "step": 5,
+      "tool": "deploy_history",
+      "args": {},
+      "ok": true,
+      "elapsed_ms": 1764,
+      "at": "2026-10-23T12:15:35.374Z"
+    },
+    {
+      "step": 6,
+      "tool": "search_logs",
+      "args": {
+        "errors_only": false,
+        "limit": 10,
+        "service": "cart"
+      },
+      "ok": true,
+      "elapsed_ms": 560,
+      "at": "2026-10-23T12:15:37.139Z"
+    },
+    {
+      "step": 7,
+      "tool": "get_trace",
+      "args": {
+        "trace_id": "442e1778a709e3159d861c674ab88088"
+      },
+      "ok": true,
+      "elapsed_ms": 7,
+      "at": "2026-10-23T12:16:25.959Z"
+    }
+  ],
+  "llm": {
+    "model": "qwen/qwen3.8-27b",
+    "tool_calls": 7,
+    "tokens": 23223,
+    "elapsed_s": 135.8
+  },
+  "safety_note": "Diagnosis only: read-only tools, no feature-flag access, no changes made. Any action requires human approval and goes through the Action API (Hands).",
+  "schema_problems": []
+}

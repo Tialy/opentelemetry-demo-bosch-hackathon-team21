@@ -1,0 +1,185 @@
+{
+  "schema_version": "brain/1",
+  "component": "brain",
+  "incident_id": "manual:frontend",
+  "generated_at": "2026-10-23T12:08:22.855Z",
+  "outcome": "escalated",
+  "trigger": {
+    "id": "manual:frontend",
+    "kind": "manual_alert",
+    "service": "frontend",
+    "title": "users see errors on the shop"
+  },
+  "symptoms_summary": "Users see 500 errors on the shop: frontend 5xx rate is 14.3% (threshold 5%), frontend error ratio 21% vs 9.5% baseline, and checkout error ratio is 100%. All failing requests are cart-related (GET /api/cart, AddItem) failing with gRPC status 14 UNAVAILABLE (EHOSTUNREACH to cart:7070).",
+  "root_cause": {
+    "category": "container_down_or_restarting",
+    "cause": "The cart container exited (exit code 0, no OOM) about 18 minutes ago and was never restarted, so all gRPC calls from frontend and checkout to cart:7070 fail with UNAVAILABLE/EHOSTUNREACH, surfacing as 500s to users.",
+    "component": "cart container (oteldemo.CartService, port 7070)",
+    "service": "cart"
+  },
+  "confidence": 0.16,
+  "model_confidence": 0.95,
+  "confidence_notes": [
+    "5 of 6 evidence items were not found in tool outputs and were dropped",
+    "fewer than 2 verified evidence items"
+  ],
+  "evidence": [
+    {
+      "detail": "Trace shows the exact failure: connection to cart host unreachable, propagating as 500 up the chain.",
+      "reference": "14 UNAVAILABLE: No connection established. Last error: Error: connect EHOSTUNREACH 172.18.0.21:7070",
+      "source": "traces",
+      "verified": true
+    }
+  ],
+  "unverified_evidence_dropped": [
+    {
+      "detail": "Detector reports the cart container is stopped, matching the alert time window.",
+      "reference": "container_stopped:cart ... Exited (0) 18 minutes ago",
+      "source": "alert",
+      "verified": false
+    },
+    {
+      "detail": "Container state confirms cart is exited, not OOM-killed, no restarts.",
+      "reference": "state: exited, exit_code: 0, oom_killed: false, restart_count: 0, finished_at: 2026-10-23T11:46:54.43034233Z",
+      "source": "containers",
+      "verified": false
+    },
+    {
+      "detail": "Errors originate in frontend's gRPC calls to cart with status 14 (UNAVAILABLE).",
+      "reference": "oteldemo.CartService/GetCart ... rpc.grpc.status_code:14.0, server.address:cart, server.port:7070.0",
+      "source": "traces",
+      "verified": false
+    },
+    {
+      "detail": "Frontend logs show continuous API failures during the incident.",
+      "reference": "API request failed ... 2026-10-23T12:06:44.28Z",
+      "source": "logs",
+      "verified": false
+    },
+    {
+      "detail": "Frontend 5xx rate 14.3% vs 5% threshold; checkout error ratio 1.0 (also depends on cart).",
+      "reference": "http_5xx_rate:frontend observed_value 0.142581 threshold 0.05; checkout error_ratio 1.0",
+      "source": "metrics",
+      "verified": false
+    }
+  ],
+  "alternatives_ruled_out": [
+    "Resource exhaustion: cart was not OOM-killed (oom_killed: false) and exited with code 0",
+    "Code regression/deploy: no recent restarts of cart or other services in deploy history; all other services healthy with 0% errors",
+    "Latency issue: p95 latencies are at or below baseline; failures are hard errors, not slowness",
+    "Network-wide issue: only cart:7070 is unreachable; all other services (product-catalog, currency, recommendation, ad) are healthy"
+  ],
+  "recommended_action": {
+    "action": "escalate_to_human",
+    "target": "cart",
+    "reason": "Confidence 0.16 is below 0.6. Proposed fix kept for the human: restart_service cart",
+    "proposed_fix": {
+      "action": "restart_service",
+      "reason": "The cart container exited cleanly (exit code 0, no OOM) and was never restarted; restarting it will restore cart:7070 and clear the UNAVAILABLE errors in frontend and checkout.",
+      "target": "cart"
+    }
+  },
+  "prevention": "Add a container liveness/orchestration policy (e.g. Docker restart=always or a k8s liveness probe) so the cart container is automatically restarted if it exits, and alert on container exit events rather than waiting for user-facing 5xx rates to breach.",
+  "investigation": [
+    {
+      "step": 1,
+      "tool": "service_health",
+      "args": {},
+      "ok": true,
+      "elapsed_ms": 64,
+      "at": "2026-10-23T12:04:58.204Z"
+    },
+    {
+      "step": 2,
+      "tool": "check_alerts",
+      "args": {},
+      "ok": true,
+      "elapsed_ms": 2456,
+      "at": "2026-10-23T12:04:58.268Z"
+    },
+    {
+      "step": 3,
+      "tool": "find_error_origins",
+      "args": {
+        "service": "frontend"
+      },
+      "ok": true,
+      "elapsed_ms": 22,
+      "at": "2026-10-23T12:05:29.533Z"
+    },
+    {
+      "step": 4,
+      "tool": "container_details",
+      "args": {
+        "name": "cart"
+      },
+      "ok": true,
+      "elapsed_ms": 1059,
+      "at": "2026-10-23T12:05:29.555Z"
+    },
+    {
+      "step": 5,
+      "tool": "search_logs",
+      "args": {
+        "contains": "cart",
+        "limit": 10,
+        "service": "frontend"
+      },
+      "ok": true,
+      "elapsed_ms": 901,
+      "at": "2026-10-23T12:05:31.739Z"
+    },
+    {
+      "step": 6,
+      "tool": "deploy_history",
+      "args": {
+        "limit": 5
+      },
+      "ok": true,
+      "elapsed_ms": 880,
+      "at": "2026-10-23T12:05:32.640Z"
+    },
+    {
+      "step": 7,
+      "tool": "search_logs",
+      "args": {
+        "contains": "UNAVAILABLE",
+        "limit": 10,
+        "service": "frontend"
+      },
+      "ok": true,
+      "elapsed_ms": 606,
+      "at": "2026-10-23T12:06:07.522Z"
+    },
+    {
+      "step": 8,
+      "tool": "search_logs",
+      "args": {
+        "errors_only": true,
+        "limit": 15,
+        "service": "frontend"
+      },
+      "ok": true,
+      "elapsed_ms": 532,
+      "at": "2026-10-23T12:06:45.037Z"
+    },
+    {
+      "step": 9,
+      "tool": "get_trace",
+      "args": {
+        "trace_id": "545d36e4f66cc5d30e67e14d0a291fcf"
+      },
+      "ok": true,
+      "elapsed_ms": 8,
+      "at": "2026-10-23T12:07:32.472Z"
+    }
+  ],
+  "llm": {
+    "model": "qwen/qwen3.8-27b",
+    "tool_calls": 9,
+    "tokens": 30181,
+    "elapsed_s": 219.4
+  },
+  "safety_note": "Diagnosis only: read-only tools, no feature-flag access, no changes made. Any action requires human approval and goes through the Action API (Hands).",
+  "schema_problems": []
+}
