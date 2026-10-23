@@ -1,0 +1,34 @@
+digraph EyesArchitecture {
+  graph [rankdir=TB, splines=ortho, nodesep=0.28, ranksep=0.42, pad=0.20, bgcolor="white", label="TEAM 21 — EYES: INCIDENT DETECTION & EVIDENCE GATHERING", labelloc=t, fontsize=18, fontname="Arial Bold"];
+  node [shape=box, style="rounded,filled", fontname="Arial", fontsize=10, margin="0.14,0.09", color="#31545B", fillcolor="#EDF7F5", fontcolor="#12343B"];
+  edge [color="#487981", penwidth=1.2, arrowsize=0.7, fontname="Arial", fontsize=9];
+
+  prom [label="Prometheus API\nHTTP counters + duration histograms", fillcolor="#E2F2EF"];
+  rules [label="Threshold evaluator\n5xx rate ≥ 5% OR p95 latency ≥ 1,000 ms\n5-minute window; thresholds configurable"];
+  decision [shape=diamond, label="Threshold\nbreached?", fillcolor="#FFF3D8", color="#A56E00"];
+  wait [label="Wait for next poll\n(default: 15 seconds)", fillcolor="#F3F5F6"];
+  event [label="Create incident event\nservice + observed value + threshold + metric evidence", fillcolor="#FBE8EA", color="#9C2636", fontcolor="#6F1422"];
+  jaeger [label="Jaeger API v3 via frontend proxy\nquery traces for affected service", fillcolor="#E8F0FB", color="#3D6193"];
+  logs [label="OpenSearch API\nquery recent logs for affected service", fillcolor="#E8F0FB", color="#3D6193"];
+  docker [label="Docker CLI\ncheck relevant container health/status", fillcolor="#E8F0FB", color="#3D6193"];
+  evidence [label="Structured evidence JSON\ntrigger + metrics + traces + logs + container state", fillcolor="#E1F2E7", color="#38734E"];
+  brain [label="Brain component\nroot-cause diagnosis + confidence", fillcolor="#F1E8FA", color="#7851A0"];
+  safety [shape=note, label="READ-ONLY BOUNDARY\nNo flag reads, config edits, restarts, traffic changes,\nor remediation API calls from Eyes.", fillcolor="#FFF4F4", color="#A52D3C", fontcolor="#6F1422"];
+
+  prom -> rules -> decision;
+  decision -> wait [label="No"];
+  wait -> prom;
+  decision -> event [label="Yes"];
+  event -> jaeger;
+  event -> logs;
+  event -> docker;
+  jaeger -> evidence;
+  logs -> evidence;
+  docker -> evidence;
+  evidence -> brain [label="handoff"];
+  safety -> rules [style=dashed, arrowhead=none, color="#A52D3C"];
+  safety -> jaeger [style=dashed, arrowhead=none, color="#A52D3C"];
+  safety -> logs [style=dashed, arrowhead=none, color="#A52D3C"];
+  safety -> docker [style=dashed, arrowhead=none, color="#A52D3C"];
+  {rank=same; jaeger; logs; docker;}
+}
