@@ -58,3 +58,9 @@ src/frontend/cypress/screenshots
 src/shipping/target/
 
 !src/currency/build
+
+# Environment files and Python bytecode
+.env
+*.env
+__pycache__/
+
